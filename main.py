@@ -76,6 +76,7 @@ def get_text_number(message):
             message.chat.id,
             "❌ شماره معتبر نیست.\nمثال صحیح: 09123456789 یا +989123456789"
         )
+        
         return
 
     telegram_id = message.from_user.id
