@@ -18,4 +18,17 @@ def contact(message):
         f.write(f"{message.from_user.id},{message.from_user.first_name},{message.contact.phone_number}\n")
     bot.send_message(message.chat.id, "شماره شما ثبت شد.\nلینک: https://example.com")
 
+@bot.message_handler(commands=['showcontacts'])
+def show_contacts(message):
+    try:
+        with open("contacts.csv", "r", encoding="utf-8") as f:
+            data = f.read()
+        if data:
+            bot.send_message(message.chat.id, f"شماره‌ها:\n{data}")
+        else:
+            bot.send_message(message.chat.id, "فایل خالی است.")
+    except FileNotFoundError:
+        bot.send_message(message.chat.id, "فایل موجود نیست.")
+
+
 bot.polling()
