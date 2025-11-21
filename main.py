@@ -63,6 +63,11 @@ https://forms.gle/eNzwQAQeopo73pnz7""")
 # -------------------------------
 @bot.message_handler(content_types=['text'])
 def get_text_number(message):
+
+    # اگر متن یک فرمان است → از این هندلر خارج شو
+    if message.text.startswith("/"):
+        return  # می‌گذارد برود برای هندلرهای /command
+
     phone = message.text.strip()
 
     # شماره معتبر؟ (فقط اعداد – 9 تا 15 رقم – با یا بدون +98)
@@ -82,7 +87,6 @@ def get_text_number(message):
     bot.send_message(message.chat.id, """شماره شما ثبت شد.  
 لینک تست شما آماده است:  
 https://forms.gle/eNzwQAQeopo73pnz7""")
-
 
 # -------------------------------
 # فرمان نمایش شماره‌ها
