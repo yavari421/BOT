@@ -1,10 +1,3 @@
-import os
-import telebot
-import sqlite3
-# TOKEN = "8296249064:AAHU5ycJcXzgId3nFNsA5Q6vjjyKfWwP4l8"
-
-
-
 import sqlite3
 import telebot
 import os
@@ -20,11 +13,6 @@ CREATE TABLE IF NOT EXISTS contacts(
 )
 """)
 conn.commit()
-
-# # /start
-# @bot.message_handler(commands=['start'])
-# def start(message):
-#     bot.send_message(message.chat.id, "سلام! لطفا شماره تماس خود را ارسال کنید.")
 
 # توکن را از Environment Variable می‌خوانیم
 TOKEN = os.environ.get("BOT_TOKEN")
