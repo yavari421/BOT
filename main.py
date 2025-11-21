@@ -1,6 +1,6 @@
 import os
 import telebot
-
+import sqlite3
 # TOKEN = "8296249064:AAHU5ycJcXzgId3nFNsA5Q6vjjyKfWwP4l8"
 
 
@@ -30,5 +30,27 @@ def show_contacts(message):
     except FileNotFoundError:
         bot.send_message(message.chat.id, "فایل موجود نیست.")
 
+
+
+conn = sqlite3.connect("contacts.db")
+cursor = conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS contacts(
+    telegram_id TEXT,
+    name TEXT,
+    phone TEXT
+)
+""")
+conn.commit()
+
+@bot.message_handler(content_types=['contact'])
+def contact(message):
+    telegram_id = message.from_user.id
+    name = message.from_user.first_name
+    phone = message.contact.phone_number
+
+    cursor.execute("INSERT INTO contacts VALUES (?,?,?)", (telegram_id, name, phone))
+    conn.commit()
+    bot.send_message(message.chat.id, "شماره شما ثبت شد.\nلینک: https://example.com")
 
 bot.polling()
