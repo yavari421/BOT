@@ -43,12 +43,15 @@ def start(message):
                         🎯 هدف ما اینه که قبل از شروع دوره، مطمئن بشی مسیرت درسته و با انگیزه وارد یادگیری بشی.
                         آماده‌ای شروع کنیم؟ 🚀! لطفا شماره تماس خود را ارسال کنید.""")
     
-# دریافت شماره
-@bot.message_handler(content_types=['contact'])
+@bot.message_handler(content_types=['text', 'contact'])
 def contact(message):
+    if message.content_type == 'contact':
+        phone = message.contact.phone_number
+    else:
+        phone = message.text  # فرض می‌کنیم کاربر شماره را متن وارد کرده
+
     telegram_id = message.from_user.id
     name = message.from_user.first_name
-    phone = message.contact.phone_number
 
     cursor.execute("INSERT INTO contacts VALUES (?,?,?)", (telegram_id, name, phone))
     conn.commit()
