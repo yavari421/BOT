@@ -1,4 +1,5 @@
 import sqlite3
+import os
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -195,7 +196,7 @@ async def show_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- RUN ---------------- #
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = os.environ.get("BOT_TOKEN")
 
 app = ApplicationBuilder().token(TOKEN).build()
 
