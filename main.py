@@ -2,7 +2,6 @@ import sqlite3
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 import os
-
 # ---------------- DATABASE INIT ---------------- #
 def init_db():
     conn = sqlite3.connect("data.db")
