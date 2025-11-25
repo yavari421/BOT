@@ -1,6 +1,6 @@
-import telebot
-from telebot.types import KeyboardButton, ReplyKeyboardMarkup
 import sqlite3
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 import os
 
 
