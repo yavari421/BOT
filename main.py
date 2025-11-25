@@ -1,7 +1,7 @@
+import telebot
+from telebot.types import KeyboardButton, ReplyKeyboardMarkup
 import sqlite3
 import os
-import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 
 # ---------------- DATABASE INIT ---------------- #
