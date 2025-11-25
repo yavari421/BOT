@@ -1,34 +1,69 @@
 import sqlite3
-import telebot
-import os
-import re  # برای چک شماره معتبر
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# -------------------------------
-# دیتابیس
-# -------------------------------
-conn = sqlite3.connect("contacts.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS contacts(
-    telegram_id TEXT,
-    name TEXT,
-    phone TEXT
-)
-""")
-conn.commit()
+# ---------------- DATABASE INIT ---------------- #
+def init_db():
+    conn = sqlite3.connect("data.db")
+    c = conn.cursor()
+    
+    # جدول کاربران + شماره تماس + id تلگرام
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            chat_id INTEGER PRIMARY KEY,
+            name TEXT,
+            phone TEXT
+        )
+    """)
+    
+    # جدول پاسخ‌ها
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS answers (
+            chat_id INTEGER,
+            q1 TEXT,
+            q2 TEXT,
+            q3 TEXT,
+            q4 TEXT,
+            q5 TEXT
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
 
-# -------------------------------
-# توکن (Environment Variable)
-# -------------------------------
-TOKEN = os.environ.get("BOT_TOKEN")
-bot = telebot.TeleBot(TOKEN)
+init_db()
 
-# -------------------------------
-# /start
-# -------------------------------
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, """👋 سلام و خوش اومدی به ربات استعدادیابی برنامه‌نویسی نوجوانان!
+# ---------------- QUESTIONS ---------------- #
+QUESTIONS = [
+    "سؤال ۱: اگر بخوای یه لیست از نمرات رو مرتب کنی، کدوم روش بهتره؟\n1. از بزرگ به کوچک\n2. از کوچک به بزرگ\n3. بر اساس میانگین\n4. نمی‌دانم",
+    "سؤال ۲: وقتی یه بازی می‌سازی، اول باید چی رو مشخص کنی؟\n1. رنگ‌ها و گرافیک  \n2. قوانین و هدف بازی \n3. اسم بازی  \n4. تعداد بازیکن‌ها",
+    "سؤال ۳: اگر یه ربات داشته باشی که باید از یه مسیر پیچیده عبور کنه، چی براش مهم‌تره؟\n1. سرعت حرکت  \n2. نقشه مسیر  \n3. رنگ ربات  \n4. تعداد چرخ‌ها",
+    "سؤال ۴: کدوم جمله بیشتر بهت حس خوبی می‌ده؟\n1. وقتی یه مسئله سخت رو حل می‌کنم   \n2.  وقتی یه چیز جدید می‌سازم  \n3. وقتی با دوستام بازی می‌کنم  \n4. وقتی چیزی رو سریع یاد می‌گیرم",
+    "سؤال ۵: اگه یه کد بنویسی و کار نکنه، چی کار می‌کنی؟\n1.  سریع بی‌خیال می‌شی  \n2. دنبال ایرادش می‌گردی  \n3. از کسی کمک می‌گیری  \n4. دوباره از اول می‌نویسی"
+]
+
+# ---------------- USER MEMORY ---------------- #
+WAITING_FOR_PHONE = {}
+USER_STATE = {}
+USER_ANSWERS = {}
+
+# ---------------- HELPERS ---------------- #
+def is_valid_choice(x):
+    return x in ["1", "2", "3", "4"]
+
+# ---------------- HANDLERS ---------------- #
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    name = update.message.from_user.first_name
+
+    WAITING_FOR_PHONE[chat_id] = True  # منتظر شماره تماس
+    
+    # دکمه ارسال شماره
+    kb = [[KeyboardButton("📱 ارسال شماره تماس", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(kb, resize_keyboard=True)
+
+    await update.message.reply_text(
+        f"""سلام {name} 👋\n\nخوش اومدی به ربات استعدادیابی برنامه‌نویسی نوجوانان!
 
 اینجا می‌تونی در کمتر از ۳ دقیقه بفهمی آیا ذهن و استعدادت برای یادگیری برنامه‌نویسی ساخته شده یا نه.
 
@@ -38,92 +73,140 @@ def start(message):
 
 🎯 هدف ما اینه که قبل از شروع دوره، مطمئن بشی مسیرت درسته و با انگیزه وارد یادگیری بشی.
 
-📞 لطفاً شماره تماس خود را ارسال کنید (یا از دکمه ارسال شماره استفاده کنید).""")
+📞 لطفاً شماره تماس خود را ارسال کنید (یا از دکمه ارسال شماره استفاده کنید)""",
+        reply_markup=reply_markup
+    )
 
 
-## -------------------------------
-# دریافت شماره از دکمه Contact
-# -------------------------------
-@bot.message_handler(content_types=['contact'])
-def get_contact(message):
-    telegram_id = message.from_user.id
-    name = message.from_user.first_name
-    phone = message.contact.phone_number
-
-    cursor.execute("INSERT INTO contacts VALUES (?,?,?)", (telegram_id, name, phone))
-    conn.commit()
-
-    bot.send_message(message.chat.id, """شماره شما ثبت شد.  
-لینک تست شما آماده است:  
-https://forms.gle/eNzwQAQeopo73pnz7""")
-
-
-# -------------------------------
-# دریافت شماره در قالب متن + چک اعتبار
-# -------------------------------
-@bot.message_handler(content_types=['text'])
-def get_text_number(message):
-
-    # اگر متن یک فرمان است → از این هندلر خارج شو
-    if message.text.startswith("/"):
-        return  # می‌گذارد برود برای هندلرهای /command
-
-    phone = message.text.strip()
-
-    # شماره معتبر؟ (فقط اعداد – 9 تا 15 رقم – با یا بدون +98)
-    if not re.match(r'^\+?\d{9,15}$', phone):
-        bot.send_message(
-            message.chat.id,
-            "❌ شماره معتبر نیست.\nمثال صحیح: 09123456789 یا +989123456789"
-        )
-        
+async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    
+    if chat_id not in WAITING_FOR_PHONE:
         return
 
-    telegram_id = message.from_user.id
-    name = message.from_user.first_name
+    # گرفتن شماره کانتکت
+    if update.message.contact:
+        phone = update.message.contact.phone_number
+    else:
+        phone = update.message.text.strip()
 
-    cursor.execute("INSERT INTO contacts VALUES (?,?,?)", (telegram_id, name, phone))
+    # اعتبارسنجی دستی
+    if not phone.startswith(("09", "+989")):
+        await update.message.reply_text("❌ لطفاً یک شماره معتبر ارسال کنید.\nمثال: 09121234567")
+        return
+
+    # ذخیره در دیتابیس
+    conn = sqlite3.connect("data.db")
+    c = conn.cursor()
+
+    c.execute("""
+        INSERT OR REPLACE INTO users (chat_id, name, phone)
+        VALUES (?, ?, ?)
+    """, (chat_id, update.message.from_user.first_name, phone))
+
     conn.commit()
+    conn.close()
 
-    bot.send_message(message.chat.id, """شماره شما ثبت شد.  
-لینک تست شما آماده است:  
-https://forms.gle/eNzwQAQeopo73pnz7""")
+    # شروع آزمون
+    del WAITING_FOR_PHONE[chat_id]
+    USER_STATE[chat_id] = 0
+    USER_ANSWERS[chat_id] = {}
 
-# -------------------------------
-# فرمان نمایش شماره‌ها
-# -------------------------------
-@bot.message_handler(commands=['showcontacts'])
-def show_contacts(message):
-    cursor.execute("SELECT * FROM contacts")
-    rows = cursor.fetchall()
-    if rows:
-        data = "\n".join([f"{r[0]}, {r[1]}, {r[2]}" for r in rows])
-        for chunk in [data[i:i+4000] for i in range(0, len(data), 4000)]:
-            bot.send_message(message.chat.id, chunk)
-    else:
-        bot.send_message(message.chat.id, "هیچ شماره‌ای ذخیره نشده است.")
+    await update.message.reply_text("شماره با موفقیت ثبت شد ✔\n\nبریم سراغ سوالات…")
+    await update.message.reply_text(QUESTIONS[0])
 
 
-# -------------------------------
-# دانلود CSV
-# -------------------------------
-@bot.message_handler(commands=['download'])
-def download_file(message):
-    import csv
-    cursor.execute("SELECT * FROM contacts")
-    rows = cursor.fetchall()
-    if rows:
-        with open("contacts.csv", "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["telegram_id", "name", "phone"])
-            writer.writerows(rows)
-        with open("contacts.csv", "rb") as f:
-            bot.send_document(message.chat.id, f)
-    else:
-        bot.send_message(message.chat.id, "فایلی برای دانلود موجود نیست.")
+async def answers_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    text = update.message.text.strip()
+
+    # اگر شماره نگرفته بود
+    if chat_id in WAITING_FOR_PHONE:
+        await update.message.reply_text("❗ لطفاً ابتدا شماره تماس را ارسال کنید.")
+        return
+
+    # اگر آزمون فعال نیست
+    if chat_id not in USER_STATE:
+        await update.message.reply_text("برای شروع تست، دستور /start را بزنید.")
+        return
+
+    # اعتبارسنجی جواب
+    if not is_valid_choice(text):
+        await update.message.reply_text("❌ فقط عدد 1 تا 4 را وارد کنید.")
+        return
+
+    # ذخیره جواب
+    question_index = USER_STATE[chat_id]
+    USER_ANSWERS[chat_id][question_index] = text
+
+    USER_STATE[chat_id] += 1
+
+    # اگر آزمون تمام شد
+    if USER_STATE[chat_id] == len(QUESTIONS):
+
+        conn = sqlite3.connect("data.db")
+        c = conn.cursor()
+
+        c.execute("""
+            INSERT INTO answers (chat_id, q1, q2, q3, q4, q5)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            chat_id,
+            USER_ANSWERS[chat_id][0],
+            USER_ANSWERS[chat_id][1],
+            USER_ANSWERS[chat_id][2],
+            USER_ANSWERS[chat_id][3],
+            USER_ANSWERS[chat_id][4]
+        ))
+
+        conn.commit()
+        conn.close()
+
+        # پاک کردن وضعیت
+        del USER_STATE[chat_id]
+        del USER_ANSWERS[chat_id]
+
+        await update.message.reply_text("🎉 پاسخ‌های شما با موفقیت ثبت شد!\nبه‌زودی نتیجه برای شما ارسال می‌شود 🙌")
+        return
+
+    # ارسال سؤال بعدی
+    await update.message.reply_text(QUESTIONS[USER_STATE[chat_id]])
 
 
-# -------------------------------
-# شروع Polling
-# -------------------------------
-bot.polling()
+async def show_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    conn = sqlite3.connect("data.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM users")
+    users = c.fetchall()
+
+    c.execute("SELECT * FROM answers")
+    answers = c.fetchall()
+    conn.close()
+
+    msg = "📋 لیست کاربران:\n\n"
+    for u in users:
+        msg += f"ID: {u[0]} | نام: {u[1]} | تلفن: {u[2]}\n"
+
+    msg += "\n\n📝 پاسخ‌ها:\n\n"
+    for a in answers:
+        msg += f"{a[0]} → {a[1]}, {a[2]}, {a[3]}, {a[4]}, {a[5]}\n"
+
+    await update.message.reply_text(msg)
+
+
+# ---------------- RUN ---------------- #
+TOKEN = "YOUR_BOT_TOKEN"
+
+app = ApplicationBuilder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("show", show_all))
+
+# شماره‌گیری
+app.add_handler(MessageHandler(filters.CONTACT, get_phone))
+app.add_handler(MessageHandler(filters.Regex("^(09|\\+989)"), get_phone))
+
+# جواب‌های تست
+app.add_handler(MessageHandler(filters.TEXT, answers_handler))
+
+app.run_polling()
